@@ -2,10 +2,9 @@
 ;;; A naive, one-level quasiquote implementation + optimizations
 ;;;
 ;;; Programmer: Mayer Goldberg, 2016
-(load "compiler1.scm")
+
 (load "pattern-matcher.scm")
 
-;;;
 
 (define ^quote?
   (lambda (tag)
