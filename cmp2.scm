@@ -400,3 +400,21 @@
                  (error 'parse-2
                         (format 'yet e)))))))
 
+;--------------------------------ass3------------------------------------------------------
+
+
+;----------------------------------4 remove-applic-lambda-nil--------------------------------
+(define nil-lambda?
+  (lambda (e)
+    (and (pair? e) (= 3 (length e)) (equal? 'lambda-simple (car e)) (null? (cadr e)))
+    ))
+
+(define remove-applic-lambda-nil
+  (lambda (e)
+    (cond ((or (not (pair? e)) (null? e)) e)
+          ((and (equal? 'applic (car e)) (nil-lambda? (cadr e))) (caddr (cadr e)))
+          (else `(,(remove-applic-lambda-nil (car e)) ,@(remove-applic-lambda-nil (cdr e)))))
+    ))
+        
+    
+
