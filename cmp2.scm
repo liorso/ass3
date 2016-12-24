@@ -497,20 +497,20 @@
 
 (define box-vars
   (lambda (e)
-    (set! list-to-box (filter (lambda (x)  (should-box? (cddr (cadr e)) x)) (cadadr e)))
-    `(,(make-boxes list-to-box) ,(box-in-body (cddr (cadr e)) list-to-box))
+    (set! list-to-box (filter (lambda (x)  (should-box? (cddr e) x)) (cadr e)))
+    `(,(make-boxes list-to-box) ,(box-in-body (cddr e) list-to-box))
     ))
 
               
 (define box-set
   (lambda (e)
     (cond ((or (not (pair? e)) (null? e)) e)
-          ((and (equal? (car e) 'applic) (pair? (cadr e)) (lambda? (caadr e))) 
+          ((and (lambda? (car e)) (not (null? (car (box-vars e)))))
            (begin (set! after-box-vars (box-vars e))
-                  `(applic (,(caadr e) ,(cadadr e) (seq (,@(car after-box-vars) ,@(if (equal? 'seq (caadr after-box-vars))
+                  `(,(car e) ,(cadr e) (seq (,@(car after-box-vars) ,@(if (equal? 'seq (caadr after-box-vars))
                                                                                (box-set (cadadr after-box-vars))
                                                                                (box-set (cadr after-box-vars))))))
-                  ,@(box-set (cddr e)))));what to do with lambda-var
+                  ));what to do with lambda-var
           (else `(,(box-set (car e)) ,@(box-set (cdr e)))))
     ))
        
