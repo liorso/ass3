@@ -400,7 +400,7 @@
                  (error 'parse-2
                         (format 'yet e)))))))
 
-;--------------------------------ass3------------------------------------------------------
+;-----------------------------------------------ass3------------------------------------------------------
 
 
 ;----------------------------------4 remove-applic-lambda-nil--------------------------------
@@ -412,9 +412,112 @@
 (define remove-applic-lambda-nil
   (lambda (e)
     (cond ((or (not (pair? e)) (null? e)) e)
-          ((and (equal? 'applic (car e)) (nil-lambda? (cadr e))) (caddr (cadr e)))
+          ((and (equal? 'applic (car e)) (nil-lambda? (cadr e))) (remove-applic-lambda-nil (caddr (cadr e))))
           (else `(,(remove-applic-lambda-nil (car e)) ,@(remove-applic-lambda-nil (cdr e)))))
     ))
+
+;---------------------------------5 Boxing of variables-----------------------------------------
+(define lambda?
+  (lambda (e)
+    (or (equal? 'lambda-simple e) (equal? 'lambda-opt e) (equal? 'lambda-var e))
+    ))
+
+;----finding boxing
+(define deep-member-bound
+  (lambda (var e)
+    (cond ((equal? var e) #t)
+          ((or (not (pair? e)) (null? e)) #f)
+          ((member var e) #t)
+          ((and (lambda? (car e)) (member var (cadr e))) #f)
+          (else (or (deep-member-bound var (car e)) (deep-member-bound var (cdr e)))))
+    ))
+    
+
+
+(define bounded?
+  (lambda (e var)
+    (cond ((or (not (pair? e)) (null? e)) #f)
+          ((lambda? (car e)) (and (deep-member-bound var (caddr e)) (not (member var (cadr e)))))
+          (else (or (bounded? (car e) var) (bounded? (cdr e) var))))
+    ))
+
+
+(define var-read?
+  (lambda (e var)
+    (cond ((equal? var e) #t)
+          ((or (not (pair? e)) (null? e)) #f)
+          ((equal? (car e) 'set) (var-read? (cddr e) var))
+          ((and (lambda? (car e)) (member var (cadr e))) #f)
+          (else (or (var-read? (car e) var) (var-read? (cdr e) var))))
+    ))
+
+
+(define var-write?
+  (lambda (e var)
+    (cond ((or (not (pair? e)) (null? e)) #f)
+          ((and (lambda? (car e)) (member var (cadr e))) #f)
+          ((and (equal? (car e) 'set) (equal? (cadadr e) var)) #t)
+          (else (or (var-write? (car e) var) (var-write? (cdr e) var))))
+    ))
+
+(define should-box?
+  (lambda (e var)
+    (and (var-write? e var) (var-read? e var) (bounded? e var))
+    ))
+
+;------handaling boxing
+(define make-boxes
+  (lambda (to-box)
+    (map (lambda (x) `(set (var ,x) (box (var ,x)))) to-box)
+    ))
+
+(define delete
+  (lambda (original-list to-delete)
+    (cond ((null? original-list) (list))
+          ((equal? (car original-list) to-delete) (delete (cdr original-list) to-delete))
+          (else (append (list (car original-list)) (delete (cdr original-list) to-delete))))
+    ))
+
+(define delete-elements
+  (lambda (original-list to-delete)
+    (if (null? to-delete) original-list
+        (delete-elements (delete original-list (car to-delete)) (cdr to-delete)))
+    ))
+
+(define box-in-body
+  (lambda (e list-vars)
+    (cond ((or (not (pair? e)) (null? e) (null? list-vars)) e)
+          ((and (equal? (car e) 'var) (member (cadr e) list-vars)) `(box-get ,e))
+          ((and (equal? (car e) 'set) (equal? (caadr e) 'var) (member (cadadr e) list-vars)) 
+           `(box-set ,(cadr e) ,@(box-in-body (cddr e) list-vars)))
+          ((lambda? (car e))  `(,(car e) ,(cadr e) ,(box-in-body (caddr e) (delete-elements list-vars (cadr e)))))
+          (else `(,(box-in-body (car e) list-vars) ,@(box-in-body (cdr e) list-vars))))
+    ))
+
+
+(define box-vars
+  (lambda (e)
+    (set! list-to-box (filter (lambda (x)  (should-box? (cddr e) x)) (cadr e)))
+    `(,(make-boxes list-to-box) ,(box-in-body (cddr e) list-to-box))
+    ))
+
+              
+(define box-set
+  (lambda (e)
+    (cond ((or (not (pair? e)) (null? e)) e)
+          ((and (lambda? (car e)) (not (null? (car (box-vars e)))))
+           (begin (set! after-box-vars (box-vars e))
+                  `(,(car e) ,(cadr e) (seq (,@(car after-box-vars) ,@(if (equal? 'seq (caadr after-box-vars))
+                                                                               (box-set (cadadr after-box-vars))
+                                                                               (box-set (cadr after-box-vars))))))
+                  ));what to do with lambda-var
+          (else `(,(box-set (car e)) ,@(box-set (cdr e)))))
+    ))
+       
+          
+
+
+        
         
     
 
