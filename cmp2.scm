@@ -430,8 +430,7 @@
           ((member var e) #t)
           ((and (lambda? (car e)) (member var (cadr e))) #f)
           (else (or (deep-member-bound var (car e)) (deep-member-bound var (cdr e)))))
-    ))
-    
+    ))    
 
 
 (define bounded?
@@ -514,7 +513,41 @@
           (else `(,(box-set (car e)) ,@(box-set (cdr e)))))
     ))
        
-          
+
+
+;----------------------------6 Annotating Variables with their Lexical address---------------------
+
+(define do-lex-bound
+  (lambda (body var major minor)
+    (cond ((or (not (pair? body)) (null? body)) body)
+          ((and (equal? 'var (car body)) (equal? var (cadr body))) `(bvar ,(cadr body) ,major ,minor))
+          ((lambda? (car body)) (if (member var (cadr body)) body
+                                    `(,(car body) ,(cadr body) ,@(do-lex-bound (cddr body) var (+ 1 major) minor))))
+          (else `(,(do-lex-bound (car body) var major minor) ,@(do-lex-bound (cdr body) var major minor))))
+    ))
+
+(define do-lex-parameter
+  (lambda (body var minor)
+    (cond ((or (not (pair? body)) (null? body)) body)
+          ((and (equal? 'var (car body)) (equal? var (cadr body))) `(pvar ,(cadr body) ,minor))
+          ((lambda? (car body)) (if (member var (cadr body)) body
+                                    `(,(car body) ,(cadr body) ,@(do-lex-bound (cddr body) var 0 minor))))
+          (else `(,(do-lex-parameter (car body) var minor) ,@(do-lex-parameter (cdr body) var minor))))
+    ))
+
+(define do-lex
+  (lambda (body vars minor)
+    (if (null? vars) body
+        (do-lex (do-lex-parameter body (car vars) minor) (cdr vars) (+ 1 minor)))
+    ))
+
+(define pe->lex-pe
+  (lambda (e)
+    (cond ((or (not (pair? e)) (null? e)) e)
+          ((equal? 'var (car e)) `(fvar ,@(cdr e)))
+          ((lambda? (car e)) `(,(car e) ,(cadr e) ,(pe->lex-pe (do-lex (caddr e) (cadr e) 0))))
+          (else `(,(pe->lex-pe (car e)) ,@(pe->lex-pe (cdr e)))))
+    ))
 
 
         
