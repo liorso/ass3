@@ -417,18 +417,15 @@
     ))
 
 ;---------------------------------5 Boxing of variables-----------------------------------------
-(define lambda?
-  (lambda (e)
-    (or (equal? 'lambda-simple e) (equal? 'lambda-opt e) (equal? 'lambda-var e))
-    ))
-
 ;----finding boxing
 (define deep-member-bound
   (lambda (var e)
     (cond ((equal? var e) #t)
           ((or (not (pair? e)) (null? e)) #f)
           ((member var e) #t)
-          ((and (lambda? (car e)) (member var (cadr e))) #f)
+          ((and (equal? 'lambda-simple (car e)) (member var (cadr e))) #f)
+          ((and (equal? 'lambda-opt (car e)) (or (member var (cadr e)) (equal? var (caddr e)))) #f)
+          ((and (equal? 'lambda-var (car e)) (equal? var (cadr e))) #f)
           (else (or (deep-member-bound var (car e)) (deep-member-bound var (cdr e)))))
     ))    
 
@@ -436,7 +433,10 @@
 (define bounded?
   (lambda (e var)
     (cond ((or (not (pair? e)) (null? e)) #f)
-          ((lambda? (car e)) (and (deep-member-bound var (caddr e)) (not (member var (cadr e)))))
+          ((equal? 'lambda-simple (car e)) (and (deep-member-bound var (caddr e)) (not (member var (cadr e)))))
+          ((equal? 'lambda-opt (car e)) (and (deep-member-bound var (cadddr e)) 
+                                             (not (or (member var (cadr e)) (equal? var (caddr e))))))
+          ((equal? 'lambda-var (car e)) (and (deep-member-bound var (caddr e)) (not (equal? var (cadr e)))))
           (else (or (bounded? (car e) var) (bounded? (cdr e) var))))
     ))
 
@@ -446,7 +446,9 @@
     (cond ((equal? var e) #t)
           ((or (not (pair? e)) (null? e)) #f)
           ((equal? (car e) 'set) (var-read? (cddr e) var))
-          ((and (lambda? (car e)) (member var (cadr e))) #f)
+          ((and (equal? 'lambda-simple (car e)) (member var (cadr e))) #f)
+          ((and (equal? 'lambda-opt (car e)) (or (member var (cadr e)) (equal? var (caddr e)))) #f)
+          ((and (equal? 'lambda-var (car e)) (equal? var (cadr e))) #f)
           (else (or (var-read? (car e) var) (var-read? (cdr e) var))))
     ))
 
@@ -454,7 +456,9 @@
 (define var-write?
   (lambda (e var)
     (cond ((or (not (pair? e)) (null? e)) #f)
-          ((and (lambda? (car e)) (member var (cadr e))) #f)
+          ((and (equal? 'lambda-simple (car e)) (member var (cadr e))) #f)
+          ((and (equal? 'lambda-opt (car e)) (or (member var (cadr e)) (equal? var (caddr e)))) #f)
+          ((and (equal? 'lambda-var (car e)) (equal? var (cadr e))) #f)
           ((and (equal? (car e) 'set) (equal? (cadadr e) var)) #t)
           (else (or (var-write? (car e) var) (var-write? (cdr e) var))))
     ))
@@ -489,39 +493,72 @@
           ((and (equal? (car e) 'var) (member (cadr e) list-vars)) `(box-get ,e))
           ((and (equal? (car e) 'set) (equal? (caadr e) 'var) (member (cadadr e) list-vars)) 
            `(box-set ,(cadr e) ,@(box-in-body (cddr e) list-vars)))
-          ((lambda? (car e))  `(,(car e) ,(cadr e) ,(box-in-body (caddr e) (delete-elements list-vars (cadr e)))))
+          ((equal? 'lambda-simple (car e))  
+           `(,(car e) ,(cadr e) ,(box-in-body (caddr e) (delete-elements list-vars (cadr e)))))
+          ((equal? 'lambda-opt (car e))
+           `(,(car e) ,(cadr e) ,(caddr e) ,(box-in-body (cadddr e) (delete-elements list-vars (cons (caddr e) (cadr e))))))
+          ((equal? 'lambda-var (car e))  
+           `(,(car e) ,(cadr e) ,(box-in-body (caddr e) (delete-elements list-vars (list (cadr e))))))
           (else `(,(box-in-body (car e) list-vars) ,@(box-in-body (cdr e) list-vars))))
     ))
 
 
-(define box-vars
+(define box-vars-simple
   (lambda (e)
     (set! list-to-box (filter (lambda (x)  (should-box? (cddr e) x)) (cadr e)))
     `(,(make-boxes list-to-box) ,(box-in-body (cddr e) list-to-box))
     ))
 
+(define box-vars-opt
+  (lambda (e)
+    (set! list-to-box (filter (lambda (x)  (should-box? (cdddr e) x)) (cons (caddr e) (cadr e))))
+    `(,(make-boxes list-to-box) ,(box-in-body (cdddr e) list-to-box))
+    ))
+
+(define box-vars-var
+  (lambda (e)
+    (if (should-box? (cddr e) (cadr e))
+        `(,(make-boxes (list (cadr e))) ,(box-in-body (cddr e) (list (cadr e))))
+        '(()()))
+    )) 
               
 (define box-set
   (lambda (e)
     (cond ((or (not (pair? e)) (null? e)) e)
-          ((and (lambda? (car e)) (not (null? (car (box-vars e)))))
-           (begin (set! after-box-vars (box-vars e))
+          ((and (equal? 'lambda-simple (car e)) (< 2 (length e)) (not (null? (car (box-vars-simple e)))))
+           (begin (set! after-box-vars (box-vars-simple e))
                   `(,(car e) ,(cadr e) (seq (,@(car after-box-vars) ,@(if (equal? 'seq (caadr after-box-vars))
                                                                                (box-set (cadadr after-box-vars))
                                                                                (box-set (cadr after-box-vars))))))
-                  ));what to do with lambda-var
+                  ))
+          ((and (equal? 'lambda-opt (car e)) (< 2 (length e)) (not (null? (car (box-vars-opt e)))))
+           (begin (set! after-box-vars (box-vars-opt e))
+                  `(,(car e) ,(cadr e) ,(caddr e) (seq (,@(car after-box-vars) ,@(if (equal? 'seq (caadr after-box-vars))
+                                                                                     (box-set (cadadr after-box-vars))
+                                                                                     (box-set (cadr after-box-vars))))))
+                  ))
+          ((and (equal? 'lambda-var (car e)) (< 2 (length e)) (not (null? (car (box-vars-var e)))))
+           (begin (set! after-box-vars (box-vars-var e))
+                  `(,(car e) ,(cadr e) (seq (,@(car after-box-vars) ,@(if (equal? 'seq (caadr after-box-vars))
+                                                                               (box-set (cadadr after-box-vars))
+                                                                               (box-set (cadr after-box-vars))))))
+                  ))
           (else `(,(box-set (car e)) ,@(box-set (cdr e)))))
     ))
        
 
 
 ;----------------------------6 Annotating Variables with their Lexical address---------------------
-
 (define do-lex-bound
   (lambda (body var major minor)
     (cond ((or (not (pair? body)) (null? body)) body)
           ((and (equal? 'var (car body)) (equal? var (cadr body))) `(bvar ,(cadr body) ,major ,minor))
-          ((lambda? (car body)) (if (member var (cadr body)) body
+          ((equal? 'lambda-simple (car body)) (if (member var (cadr body)) body
+                                    `(,(car body) ,(cadr body) ,@(do-lex-bound (cddr body) var (+ 1 major) minor))))
+          ((equal? 'lambda-opt (car body)) (if (member var (cons (caddr body) (cadr body))) body
+                                    `(,(car body) ,(cadr body) ,(caddr body) 
+                                                  ,@(do-lex-bound (cdddr body) var (+ 1 major) minor))))
+          ((equal? 'lambda-var (car body)) (if (equal? var (cadr body)) body
                                     `(,(car body) ,(cadr body) ,@(do-lex-bound (cddr body) var (+ 1 major) minor))))
           (else `(,(do-lex-bound (car body) var major minor) ,@(do-lex-bound (cdr body) var major minor))))
     ))
@@ -530,7 +567,12 @@
   (lambda (body var minor)
     (cond ((or (not (pair? body)) (null? body)) body)
           ((and (equal? 'var (car body)) (equal? var (cadr body))) `(pvar ,(cadr body) ,minor))
-          ((lambda? (car body)) (if (member var (cadr body)) body
+          ((equal? 'lambda-simple (car body)) (if (member var (cadr body)) body
+                                    `(,(car body) ,(cadr body) ,@(do-lex-bound (cddr body) var 0 minor))))
+          ((equal? 'lambda-opt (car body)) (if (member var (cons (caddr body) (cadr body))) body
+                                    `(,(car body) ,(cadr body) ,(caddr body)
+                                                  ,@(do-lex-bound (cdddr body) var 0 minor))))
+          ((equal? 'lambda-var (car body)) (if (equal? var (cadr body)) body
                                     `(,(car body) ,(cadr body) ,@(do-lex-bound (cddr body) var 0 minor))))
           (else `(,(do-lex-parameter (car body) var minor) ,@(do-lex-parameter (cdr body) var minor))))
     ))
@@ -545,9 +587,19 @@
   (lambda (e)
     (cond ((or (not (pair? e)) (null? e)) e)
           ((equal? 'var (car e)) `(fvar ,@(cdr e)))
-          ((lambda? (car e)) `(,(car e) ,(cadr e) ,(pe->lex-pe (do-lex (caddr e) (cadr e) 0))))
+          ((equal? 'lambda-simple (car e)) `(,(car e) ,(cadr e) ,(pe->lex-pe (do-lex (caddr e) (cadr e) 0))))
+          ((equal? 'lambda-opt (car e)) 
+           `(,(car e) ,(cadr e) ,(caddr e) ,(pe->lex-pe (do-lex (cadddr e) (cons (caddr e) (cadr e)) 0))))
+          ((equal? 'lambda-var (car e)) `(,(car e) ,(cadr e) ,(pe->lex-pe (do-lex (caddr e) (list (cadr e)) 0))))
           (else `(,(pe->lex-pe (car e)) ,@(pe->lex-pe (cdr e)))))
     ))
+
+;-------------------------------7  Annotating tail calls----------------------------------------
+
+
+;(define annotate-tc
+;  (lambda (e)
+
 
 
         
