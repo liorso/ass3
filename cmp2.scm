@@ -596,9 +596,51 @@
 
 ;-------------------------------7  Annotating tail calls----------------------------------------
 
+(define prepare-seq-to-tail
+  (lambda (e not-tail)
+    (if (null? (cdr e)) `(,not-tail ,e)
+        (prepare-seq-to-tail (cdr e) (list not-tail (car e))))
+    ))
 
-;(define annotate-tc
-;  (lambda (e)
+
+(define annotate-tail
+  (lambda (pe)
+    (cond ((or (not (pair? pe)) (null? pe)) pe)
+          ((equal? 'const (car pe)) pe)
+          ((equal? 'var (car pe)) pe)
+          ((equal? 'lambda-simple (car pe)) `(,(car pe) ,(cadr pe) ,(annotate-tail (caddr pe))))
+          ((equal? 'lambda-opt (car pe)) `(,(car pe) ,(cadr pe) ,(caddr pe) ,(annotate-tail (cadddr pe))))
+          ((equal? 'lambda-var (car pe)) `(,(car pe) ,(cadr pe) ,(annotate-tail (caddr pe))))
+          ((equal? 'if3 (car pe)) `(if3 ,(cadr pe) ,(annotate-tail (caddr pe)) ,(annotate-tail (cadddr pe))))
+          ((equal? 'or (car pe)) (begin (set! splited-or (prepare-seq-to-tail (cdadr pe) (caadr pe))) 
+                                        `(or ,@(car splited-or) ,(annotate-tail (cadr splited-or)))))
+          ((or (equal? 'def (car pe)) (equal? 'define (car pe))) `(,(car pe) ,(cadr pe) ,(annotate-tail (caddr pe))))
+          ((equal? 'set (car pe)) pe)
+          ((equal? 'applic (car pe)) `(tc-applic ,@(cdr pe))) ;TODO: deep
+          ((equal? 'seq (car pe)) (begin (set! splited-seq (prepare-seq-to-tail (cdadr pe) (caadr pe))) 
+                                        `(seq ,@(car splited-seq) ,(annotate-tail (cadr splited-seq)))))
+          (else `(,(annotate-tail (car pe)))))
+    ))
+
+
+(define annotate-tc
+  (lambda (pe)
+    (cond ((or (not (pair? pe)) (null? pe)) pe)
+          ((equal? 'const (car pe)) pe)
+          ((equal? 'var (car pe)) pe)
+          ((equal? 'lambda-simple (car pe)) `(,(car pe) ,(cadr pe) ,(annotate-tail (caddr pe))))
+          ((equal? 'lambda-opt (car pe)) `(,(car pe) ,(cadr pe) ,(caddr pe) ,(annotate-tail (cadddr pe))))
+          ((equal? 'lambda-var (car pe)) `(,(car pe) ,(cadr pe) ,(annotate-tail (caddr pe))))
+          ((equal? 'if3 (car pe)) `(if3 ,(cadr pe) ,(annotate-tc (caddr pe)) ,(annotate-tc (cadddr pe))))
+          ((equal? 'or (car pe)) (begin (set! splited-or (prepare-seq-to-tail (cdadr pe) (caadr pe))) 
+                                        `(or ,@(car splited-or) ,(annotate-tc (cadr splited-or)))))
+          ((or (equal? 'def (car pe)) (equal? 'define (car pe))) `(,(car pe) ,(cadr pe) ,(annotate-tc (caddr pe))))
+          ((equal? 'set (car pe)) pe)
+          ;TODO: ((equal? 'applic (car pe))
+          ((equal? 'seq (car pe)) (begin (set! splited-seq (prepare-seq-to-tail (cdadr pe) (caadr pe))) 
+                                        `(seq ,@(car splited-seq) ,(annotate-tc (cadr splited-seq)))))
+          (else `(,(annotate-tc (car pe)))))
+    ))
 
 
 
