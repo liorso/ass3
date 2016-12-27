@@ -596,12 +596,24 @@
 
 ;-------------------------------7  Annotating tail calls----------------------------------------
 
-(define prepare-seq-to-tail
+(define prepare-or-to-tail
   (lambda (e not-tail)
     (if (null? (cdr e)) `(,not-tail ,e)
-        (prepare-seq-to-tail (cdr e) (list not-tail (car e))))
+        (prepare-or-to-tail (cdr e) (list not-tail (car e))))
     ))
 
+(define prepare-seq-to-tail ;TODO 
+  (lambda (e not-tail is-first?)
+    (cond ((and is-first? (= 1 (length e))) `(,(list not-tail) ,(car e)))
+          ((null? (cdr e)) `(,not-tail ,e))
+          (else (prepare-seq-to-tail (cdr e) (list not-tail (car e)) #f)))
+    ))
+
+;(begin (+ (lambda () (+ 1 1)) (lambda () (+ 1 1) (+ 2 2) (+ 3 3
+;)) (+ 1 
+;  1) (lambda () (+ 1 1) (+ 2 2))))
+
+(define annotate-tc 1)
 
 (define annotate-tail
   (lambda (pe)
@@ -612,13 +624,13 @@
           ((equal? 'lambda-opt (car pe)) `(,(car pe) ,(cadr pe) ,(caddr pe) ,(annotate-tail (cadddr pe))))
           ((equal? 'lambda-var (car pe)) `(,(car pe) ,(cadr pe) ,(annotate-tail (caddr pe))))
           ((equal? 'if3 (car pe)) `(if3 ,(cadr pe) ,(annotate-tail (caddr pe)) ,(annotate-tail (cadddr pe))))
-          ((equal? 'or (car pe)) (begin (set! splited-or (prepare-seq-to-tail (cdadr pe) (caadr pe))) 
+          ((equal? 'or (car pe)) (begin (set! splited-or (prepare-or-to-tail (cdadr pe) (caadr pe))) 
                                         `(or ,@(car splited-or) ,(annotate-tail (cadr splited-or)))))
           ((or (equal? 'def (car pe)) (equal? 'define (car pe))) `(,(car pe) ,(cadr pe) ,(annotate-tail (caddr pe))))
           ((equal? 'set (car pe)) pe)
-          ((equal? 'applic (car pe)) `(tc-applic ,@(cdr pe))) ;TODO: deep
-          ((equal? 'seq (car pe)) (begin (set! splited-seq (prepare-seq-to-tail (cdadr pe) (caadr pe))) 
-                                        `(seq ,@(car splited-seq) ,(annotate-tail (cadr splited-seq)))))
+          ((equal? 'applic (car pe)) `(tc-applic ,(annotate-tc (cadr pe)) ,(map annotate-tc (caddr pe))))
+          ((equal? 'seq (car pe)) (begin (set! splited-seq (prepare-seq-to-tail (cdadr pe) (caadr pe) #t)) ;TODO                                        
+                                        `(seq ,`(,@(map annotate-tc (car splited-seq)) ,@(annotate-tail (cdr splited-seq))))))
           (else `(,(annotate-tail (car pe)))))
     ))
 
@@ -632,13 +644,12 @@
           ((equal? 'lambda-opt (car pe)) `(,(car pe) ,(cadr pe) ,(caddr pe) ,(annotate-tail (cadddr pe))))
           ((equal? 'lambda-var (car pe)) `(,(car pe) ,(cadr pe) ,(annotate-tail (caddr pe))))
           ((equal? 'if3 (car pe)) `(if3 ,(cadr pe) ,(annotate-tc (caddr pe)) ,(annotate-tc (cadddr pe))))
-          ((equal? 'or (car pe)) (begin (set! splited-or (prepare-seq-to-tail (cdadr pe) (caadr pe))) 
+          ((equal? 'or (car pe)) (begin (set! splited-or (prepare-or-to-tail (cdadr pe) (caadr pe))) 
                                         `(or ,@(car splited-or) ,(annotate-tc (cadr splited-or)))))
           ((or (equal? 'def (car pe)) (equal? 'define (car pe))) `(,(car pe) ,(cadr pe) ,(annotate-tc (caddr pe))))
           ((equal? 'set (car pe)) pe)
-          ;TODO: ((equal? 'applic (car pe))
-          ((equal? 'seq (car pe)) (begin (set! splited-seq (prepare-seq-to-tail (cdadr pe) (caadr pe))) 
-                                        `(seq ,@(car splited-seq) ,(annotate-tc (cadr splited-seq)))))
+          ((equal? 'applic (car pe)) `(applic ,(annotate-tc (cadr pe)) ,(map annotate-tc (caddr pe))))
+          ((equal? 'seq (car pe)) `(seq ,(map annotate-tc (cadr pe))))
           (else `(,(annotate-tc (car pe)))))
     ))
 
