@@ -178,7 +178,7 @@
                 `(,(car s) ,@(unbeginify (cdr s))))
             s))))
 
-(define parse-2
+(define parse
   (let ((run
          (compose-patterns
 
@@ -186,7 +186,7 @@
           (pattern-rule
            `(,(? 'proc (lambda (x) (not (reserved-word? x)))) . ,(? 'args)) ;maybe should change to reserved-symbol??
            (lambda (proc args)
-             `(applic ,(parse-2 proc) ,(map parse-2 args))))
+             `(applic ,(parse proc) ,(map parse args))))
           ;---------------------const---------------implimented 
           ;Nil---------------implimented
           (pattern-rule
@@ -237,22 +237,22 @@
           (pattern-rule
            `(if ,(? 'test) ,(? 'dit))
            (lambda (test dit)
-             `(if3 ,(parse-2 test) ,(parse-2 dit) (const ,void-object))))
+             `(if3 ,(parse test) ,(parse dit) (const ,void-object))))
           ;if3
           (pattern-rule
            `(if ,(? 'test) ,(? 'dit) ,(? 'dif))
            (lambda (test dit dif)
-             `(if3 ,(parse-2 test) ,(parse-2 dit) ,(parse-2 dif))))
+             `(if3 ,(parse test) ,(parse dit) ,(parse dif))))
 
           ;--------------------Disjunctions----------------implimented
           (pattern-rule
            `(or . ,(? 'exprs))
            (lambda (exprs)
              (if (> (length exprs) 1)
-             `(or ,(map parse-2 exprs))
+             `(or ,(map parse exprs))
              (if (= (length exprs) 1)
-             `,(parse-2 (car exprs))
-             `,(parse-2 `#f))
+             `,(parse (car exprs))
+             `,(parse `#f))
              )))
 
           ;--------------------Lambda----------------implimented----daniel
@@ -265,14 +265,14 @@
            (lambda (args exprs)
              (if (> (length exprs) 1)  
                  (identify-lambda args
-                                  (lambda (s) `(lambda-simple ,s (seq (,@(map parse-2 (unbeginify exprs))))))
-                                  (lambda (s opt) `(lambda-opt ,s ,opt (seq (,@(map parse-2 (unbeginify exprs))))))
-                                  (lambda (var) `(lambda-var ,var (seq (,@(map parse-2 (unbeginify exprs))))))
+                                  (lambda (s) `(lambda-simple ,s (seq (,@(map parse (unbeginify exprs))))))
+                                  (lambda (s opt) `(lambda-opt ,s ,opt (seq (,@(map parse (unbeginify exprs))))))
+                                  (lambda (var) `(lambda-var ,var (seq (,@(map parse (unbeginify exprs))))))
                                   )
                  (identify-lambda args
-                                  (lambda (s) `(lambda-simple ,s ,(parse-2 (car exprs))))
-                                  (lambda (s opt) `(lambda-opt ,s ,opt ,(parse-2 (car exprs))))
-                                  (lambda (var) `(lambda-var ,var ,(parse-2 (car exprs)))))
+                                  (lambda (s) `(lambda-simple ,s ,(parse (car exprs))))
+                                  (lambda (s opt) `(lambda-opt ,s ,opt ,(parse (car exprs))))
+                                  (lambda (var) `(lambda-var ,var ,(parse (car exprs)))))
                                   )))
 
 
@@ -282,20 +282,20 @@
            (pattern-rule
             `(define ,(? 'v (lambda (x) (not (pair? x)))) ,(? 'e))
             (lambda (v e)
-              `(def ,`(var ,v) ,(parse-2 e))))
+              `(def ,`(var ,v) ,(parse e))))
 
            ;MIT-style define
            (pattern-rule
             `(define ,(? 'v pair?) . ,(? 'e))
             (lambda (v e)
-              `(def ,`(var ,(car v)) ,(parse-2 (append `(lambda ,(cdr v)) e))))) ;Didn't test waiting for lambda
+              `(def ,`(var ,(car v)) ,(parse (append `(lambda ,(cdr v)) e))))) ;Didn't test waiting for lambda
 
 
            ;--------------------Assignments----------------implimented
            (pattern-rule
             `(set! ,(? 'v) ,(? 'e))
             (lambda (v e)
-              `(set ,`(var ,v) ,(parse-2 e))))
+              `(set ,`(var ,v) ,(parse e))))
 
 
 
@@ -305,10 +305,10 @@
             `(begin  . ,(? 'seqs))
             (lambda (seqs)
               (if (> (length seqs) 1)
-                  `(seq ,(map parse-2 (unbeginify seqs)))
+                  `(seq ,(map parse (unbeginify seqs)))
                   (if (= (length seqs) 1)
-                      `,(parse-2 (car seqs))
-                      `,(parse-2 `,void-object)))))
+                      `,(parse (car seqs))
+                      `,(parse `,void-object)))))
 
 
 
@@ -317,16 +317,16 @@
            (pattern-rule
             `(let ,(? 'def) . ,(? 'body))
             (lambda (def body)
-              (parse-2 `((lambda ,(map car def) ,@body) ,@(map cadr def)))))
+              (parse `((lambda ,(map car def) ,@body) ,@(map cadr def)))))
           
            ;---------------------let*----------------implimented
            (pattern-rule
             `(let* ,(? 'def) . ,(? 'body))
             (lambda (def body)
               (cond 
-                ((null? def) (parse-2 `((lambda () (begin ,@body)))))
-                ((null? (cdr def)) (parse-2 `(,`(lambda (,(caar def)) (begin ,@body)) ,(cadar def))))
-                (else (parse-2 `((lambda (,(caar def)) (let* ,(cdr def) ,@body)) ,(cadar def)))))))
+                ((null? def) (parse `((lambda () (begin ,@body)))))
+                ((null? (cdr def)) (parse `(,`(lambda (,(caar def)) (begin ,@body)) ,(cadar def))))
+                (else (parse `((lambda (,(caar def)) (let* ,(cdr def) ,@body)) ,(cadar def)))))))
 
 
            ;---------------------letrec----------------implimented
@@ -337,7 +337,7 @@
                                         (if (null? (cdr syms)) `((set! ,(car syms) ,(car vals)))
                                             `(,`(set! ,(car syms) ,(car vals)) ,@(make-letrec (cdr syms) (cdr vals))))))))
                 (lambda (def body)
-                  (parse-2 `((lambda ,(map car def) 
+                  (parse `((lambda ,(map car def) 
                                (begin ,@(make-letrec (map car def) (map cadr def)) ((lambda () ,@body)))) 
                                ,@(map (lambda (x) #f) def))))))
 
@@ -346,26 +346,26 @@
            (pattern-rule
             `(and)
             (lambda ()
-              (parse-2 #t)))
+              (parse #t)))
            (pattern-rule
             `(and ,(? 'con))
             (lambda (con)
-              (parse-2 con)))
+              (parse con)))
            (pattern-rule
             `(and ,(? 'con1) ,(? 'con2))
             (lambda (con1 con2)
-              (parse-2 `(if ,con1 ,con2 #f))))
+              (parse `(if ,con1 ,con2 #f))))
            (pattern-rule
             `(and . ,(? 'conses))
             (lambda (conses)
-              `(if3 ,(parse-2 (car conses)) ,(parse-2 `(and ,@(cdr conses))) ,(parse-2 #f))))
+              `(if3 ,(parse (car conses)) ,(parse `(and ,@(cdr conses))) ,(parse #f))))
 
         ;--------------------QQ------------------------------------
 
            (pattern-rule
             `(quasiquote . ,(? 'exprs ))
             (lambda (exprs)
-              (parse-2 (expand-qq (car exprs)))
+              (parse (expand-qq (car exprs)))
               ))
            
 
@@ -377,19 +377,19 @@
               (set! first (car onec))
               (set! other (cdr onec))
               (cond
-                ((and (pair? (car first)) (equal? 'else (caar first))) (parse-2 (cadar first)))
-                ((equal? 'else (car first)) (parse-2 (cadr first)))
-                ((or (not (pair? other)) (null? other)) (parse-2 `(if ,(car first) (begin ,@(cdr first)))))           
-                (else  (parse-2 `(if ,(car first)  (begin ,@(cdr first)) ,(if (equal? 'else (caar other)) `(begin ,@(cdar other))
+                ((and (pair? (car first)) (equal? 'else (caar first))) (parse (cadar first)))
+                ((equal? 'else (car first)) (parse (cadr first)))
+                ((or (not (pair? other)) (null? other)) (parse `(if ,(car first) (begin ,@(cdr first)))))           
+                (else  (parse `(if ,(car first)  (begin ,@(cdr first)) ,(if (equal? 'else (caar other)) `(begin ,@(cdar other))
                                                                      `(cond ,other))))))))
            (pattern-rule
             `(cond ,(? 'first) . ,(? 'other))
             (lambda (first other)
               (cond
-                ((and (pair? (car first)) (equal? 'else (caar first))) (parse-2 (cadar first)))
-                ((equal? 'else (car first)) (parse-2 (cadr first)))
-                ((or (not (pair? other)) (null? other)) (parse-2 `(if ,(car first) (begin ,@(cdr first)))))           
-                (else  (parse-2 `(if ,(car first) (begin ,@(cdr first)) ,(if (equal? 'else (caar other)) `(begin ,@(cdar other))
+                ((and (pair? (car first)) (equal? 'else (caar first))) (parse (cadar first)))
+                ((equal? 'else (car first)) (parse (cadr first)))
+                ((or (not (pair? other)) (null? other)) (parse `(if ,(car first) (begin ,@(cdr first)))))           
+                (else  (parse `(if ,(car first) (begin ,@(cdr first)) ,(if (equal? 'else (caar other)) `(begin ,@(cdar other))
                                                                      `(cond ,other))))))))
          
 
@@ -397,7 +397,7 @@
         (lambda (e)
           (run e
                (lambda ()
-                 (error 'parse-2
+                 (error 'parse
                         (format 'yet e)))))))
 
 ;-----------------------------------------------ass3------------------------------------------------------
@@ -602,16 +602,13 @@
         (prepare-or-to-tail (cdr e) (list not-tail (car e))))
     ))
 
-(define prepare-seq-to-tail ;TODO 
+(define prepare-seq-to-tail
   (lambda (e not-tail is-first?)
     (cond ((and is-first? (= 1 (length e))) `(,(list not-tail) ,(car e)))
           ((null? (cdr e)) `(,not-tail ,e))
-          (else (prepare-seq-to-tail (cdr e) (list not-tail (car e)) #f)))
+          (else (prepare-seq-to-tail (cdr e) (if is-first? `(,not-tail ,(car e)) `(,@not-tail ,(car e))) #f)))
     ))
 
-;(begin (+ (lambda () (+ 1 1)) (lambda () (+ 1 1) (+ 2 2) (+ 3 3
-;)) (+ 1 
-;  1) (lambda () (+ 1 1) (+ 2 2))))
 
 (define annotate-tc 1)
 
@@ -629,7 +626,7 @@
           ((or (equal? 'def (car pe)) (equal? 'define (car pe))) `(,(car pe) ,(cadr pe) ,(annotate-tail (caddr pe))))
           ((equal? 'set (car pe)) pe)
           ((equal? 'applic (car pe)) `(tc-applic ,(annotate-tc (cadr pe)) ,(map annotate-tc (caddr pe))))
-          ((equal? 'seq (car pe)) (begin (set! splited-seq (prepare-seq-to-tail (cdadr pe) (caadr pe) #t)) ;TODO                                        
+          ((equal? 'seq (car pe)) (begin (set! splited-seq (prepare-seq-to-tail (cdadr pe) (caadr pe) #t))                                        
                                         `(seq ,`(,@(map annotate-tc (car splited-seq)) ,@(annotate-tail (cdr splited-seq))))))
           (else `(,(annotate-tail (car pe)))))
     ))
@@ -651,11 +648,4 @@
           ((equal? 'applic (car pe)) `(applic ,(annotate-tc (cadr pe)) ,(map annotate-tc (caddr pe))))
           ((equal? 'seq (car pe)) `(seq ,(map annotate-tc (cadr pe))))
           (else `(,(annotate-tc (car pe)))))
-    ))
-
-
-
-        
-        
-    
-
+    ))   
