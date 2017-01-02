@@ -255,26 +255,60 @@
              `,(parse `#f))
              )))
 
-          ;--------------------Lambda----------------implimented----daniel
+ ;--------------------Lambda----------------implimented----daniel
+;          (pattern-rule
+;           `(lambda ,(? 'args ) . ,(? 'exprs))
+;           (lambda (args exprs)
+;             (if (> (length exprs) 1)  
+;                 (identify-lambda args
+;                                  (lambda (s) `(lambda-simple ,s (seq (,@(map parse (unbeginify exprs))))))
+;                                  (lambda (s opt) `(lambda-opt ,s ,opt (seq (,@(map parse (unbeginify exprs))))))
+;                                  (lambda (var) `(lambda-var ,var (seq (,@(map parse (unbeginify exprs))))))
+;                                  )
+;                 (identify-lambda args
+;                                  (lambda (s) `(lambda-simple ,s ,(parse (car exprs))))
+;                                  (lambda (s opt) `(lambda-opt ,s ,opt ,(parse (car exprs))))
+;                                  (lambda (var) `(lambda-var ,var ,(parse (car exprs)))))
+;                                  )))
+;
 
 
-          
-
+ ;          --------------------Lambda-NEW---------------implimented----daniel
+         
           (pattern-rule
            `(lambda ,(? 'args ) . ,(? 'exprs))
            (lambda (args exprs)
-             (if (> (length exprs) 1)  
-                 (identify-lambda args
-                                  (lambda (s) `(lambda-simple ,s (seq (,@(map parse (unbeginify exprs))))))
-                                  (lambda (s opt) `(lambda-opt ,s ,opt (seq (,@(map parse (unbeginify exprs))))))
-                                  (lambda (var) `(lambda-var ,var (seq (,@(map parse (unbeginify exprs))))))
-                                  )
-                 (identify-lambda args
-                                  (lambda (s) `(lambda-simple ,s ,(parse (car exprs))))
-                                  (lambda (s opt) `(lambda-opt ,s ,opt ,(parse (car exprs))))
-                                  (lambda (var) `(lambda-var ,var ,(parse (car exprs)))))
-                                  )))
-
+             (let*
+                 (;(parsed 3)
+                  (parsed `(,@(map parse (unbeginify exprs))))
+                  (defs (split parsed (lambda (d e) d)))
+                  (exps (split parsed (lambda (d e) e)))
+                  (app `(applic
+                         (lambda-simple
+                          (,@(map cadadr defs))
+                          (seq (,@(map (lambda (def) `(set ,(cadr def) ,@(cddr def))) defs)
+                                ,@exps)))
+                         (,@(map (lambda(x) '(const #f)) defs)))))
+               
+               ;)
+;               (display '++)
+;               (display defs)
+;               (display '--)
+;               (display exps)
+               (if (= 0 (length defs))
+                   (if (> (length exprs) 1)  
+                       (identify-lambda args
+                                        (lambda (s) `(lambda-simple ,s (seq ,parsed)))
+                                        (lambda (s opt) `(lambda-opt ,s ,opt (seq ,parsed)))
+                                        (lambda (var) `(lambda-var ,var (seq parsed))))
+                       (identify-lambda args
+                                        (lambda (s) `(lambda-simple ,s ,(parse (car exprs))))
+                                        (lambda (s opt) `(lambda-opt ,s ,opt ,(parse (car exprs))))
+                                        (lambda (var) `(lambda-var ,var ,(parse (car exprs))))))
+                   (identify-lambda args
+                                    (lambda (s) `(lambda-simple ,s ,app))
+                                    (lambda (s opt) `(lambda-opt ,s ,opt ,app))
+                                    (lambda (var) `(lambda-var ,var ,app)))))))
 
 
            ;--------------------Define----------------implimented
@@ -402,7 +436,81 @@
 
 ;-----------------------------------------------ass3------------------------------------------------------
 
-(define eliminate-nested-defines (lambda (x) x))
+
+
+;----------------------------------3 Eliminating nested define-expressions--------------------------------
+
+
+(define letrecTest
+  (lambda()
+    (letrec
+        ((id (lambda(x) x))
+         (sq (lambda(x) (* x x))))
+      (sq (id 2)))))
+
+(define letrecTest2
+  '(letrec
+        ((id (lambda(x) x))
+         (sq (lambda(x) (* x x))))
+      (sq (id 2))))
+
+(define split
+  (lambda (pes ret-ds-es)
+    (if (null? pes) (ret-ds-es '() '())
+        (split
+         (cdr pes)
+         (lambda (ds es)
+           (cond ((eq? (caar pes) 'def)
+                  (ret-ds-es (cons (car pes) ds) es))
+                 ((eq? (caar pes) 'seq)
+                  (split (cadar pes)
+                         (lambda (ds1 es1)
+                           (ret-ds-es (append ds1 ds)
+                                      (append es1 es)))))
+                 (else (ret-ds-es ds (cons (car pes) es)))))))))
+
+(define *test-expr*
+  '(define my-even?
+     (lambda (e)
+       (define even? (lambda (n) (or (zero? n) (odd? (- n 1)))))
+       (define odd?
+         (lambda (n) (and (positive? n) (even? (- n 1)))))
+       (even? e))))
+
+
+
+
+; test
+(define test2
+  (lambda ()
+    (split (parse test-expr2221)
+           (lambda (d e) e))))
+
+(define test222ex
+  '(lambda(e)
+     (define sq (lambda (x) (define y (lambda (z) (+ z 1))) (* x x (y 3))))
+     (define id (lambda (x) x))
+     (id (sq e))))
+
+(define testlet
+  '(letrec (
+     (sq (lambda(z) (define y (lambda (z) (+ z 1))) (* x x (y 3))))
+     (id (lambda(x) x)))
+     (id (sq e))))
+; test
+(define test22
+  (lambda () (split  `(,(parse test222ex))
+                    (lambda (d e) e))))
+(define test222
+  (lambda () (split  `(,(parse test222ex))
+                    (lambda (d e) d))))
+
+(define square$
+  (lambda (x cont) (cont (* x x))))
+(define c
+  (lambda (x) (lambda() 2 )))
+                
+
 
 ;----------------------------------4 remove-applic-lambda-nil--------------------------------
 (define nil-lambda?
