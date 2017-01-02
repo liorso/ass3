@@ -261,38 +261,40 @@
 ;           (lambda (args exprs)
 ;             (if (> (length exprs) 1)  
 ;                 (identify-lambda args
-;                                  (lambda (s) `(lambda-simple ,s (seq (,@(map parse-2 (unbeginify exprs))))))
-;                                  (lambda (s opt) `(lambda-opt ,s ,opt (seq (,@(map parse-2 (unbeginify exprs))))))
-;                                  (lambda (var) `(lambda-var ,var (seq (,@(map parse-2 (unbeginify exprs))))))
+;                                  (lambda (s) `(lambda-simple ,s (seq (,@(map parse (unbeginify exprs))))))
+;                                  (lambda (s opt) `(lambda-opt ,s ,opt (seq (,@(map parse (unbeginify exprs))))))
+;                                  (lambda (var) `(lambda-var ,var (seq (,@(map parse (unbeginify exprs))))))
 ;                                  )
 ;                 (identify-lambda args
-;                                  (lambda (s) `(lambda-simple ,s ,(parse-2 (car exprs))))
-;                                  (lambda (s opt) `(lambda-opt ,s ,opt ,(parse-2 (car exprs))))
-;                                  (lambda (var) `(lambda-var ,var ,(parse-2 (car exprs)))))
+;                                  (lambda (s) `(lambda-simple ,s ,(parse (car exprs))))
+;                                  (lambda (s opt) `(lambda-opt ,s ,opt ,(parse (car exprs))))
+;                                  (lambda (var) `(lambda-var ,var ,(parse (car exprs)))))
 ;                                  )))
 ;
 
 
  ;          --------------------Lambda-NEW---------------implimented----daniel
+         
           (pattern-rule
            `(lambda ,(? 'args ) . ,(? 'exprs))
            (lambda (args exprs)
              (let*
                  (;(parsed 3)
-                  (parsed `(,@(map parse-2 (unbeginify exprs))))
+                  (parsed `(,@(map parse (unbeginify exprs))))
                   (defs (split parsed (lambda (d e) d)))
                   (exps (split parsed (lambda (d e) e)))
-                  (app `(lambda-simple
-                         (,@(map cadadr defs))
-                         (seq ,(map (lambda (def) `(set ,(cadr def) ,@(cddr def))) defs))
-                         ,@exps
-                        (,@(map (lambda(x) '(const #f)) defs)))))
+                  (app `(applic
+                         (lambda-simple
+                          (,@(map cadadr defs))
+                          (seq (,@(map (lambda (def) `(set ,(cadr def) ,@(cddr def))) defs)
+                                ,@exps)))
+                         (,@(map (lambda(x) '(const #f)) defs)))))
                
-                  ;)
-               ;(display '++)
-               ;(display defs)
-               ;(display '--)
-               ;(display exps)
+               ;)
+;               (display '++)
+;               (display defs)
+;               (display '--)
+;               (display exps)
                (if (= 0 (length defs))
                    (if (> (length exprs) 1)  
                        (identify-lambda args
@@ -300,14 +302,13 @@
                                         (lambda (s opt) `(lambda-opt ,s ,opt (seq ,parsed)))
                                         (lambda (var) `(lambda-var ,var (seq parsed))))
                        (identify-lambda args
-                                        (lambda (s) `(lambda-simple ,s ,(parse-2 (car exprs))))
-                                        (lambda (s opt) `(lambda-opt ,s ,opt ,(parse-2 (car exprs))))
-                                        (lambda (var) `(lambda-var ,var ,(parse-2 (car exprs))))))
+                                        (lambda (s) `(lambda-simple ,s ,(parse (car exprs))))
+                                        (lambda (s opt) `(lambda-opt ,s ,opt ,(parse (car exprs))))
+                                        (lambda (var) `(lambda-var ,var ,(parse (car exprs))))))
                    (identify-lambda args
-                                        (lambda (s) `(lambda-simple ,s ,app))
-                                        (lambda (s opt) `(lambda-opt ,s ,opt ,app))
-                                        (lambda (var) `(lambda-var ,var ,app)))))))
-;
+                                    (lambda (s) `(lambda-simple ,s ,app))
+                                    (lambda (s opt) `(lambda-opt ,s ,opt ,app))
+                                    (lambda (var) `(lambda-var ,var ,app)))))))
 
 
            ;--------------------Define----------------implimented
@@ -482,7 +483,7 @@
 ; test
 (define test2
   (lambda ()
-    (split (parse-2 test-expr2221)
+    (split (parse test-expr2221)
            (lambda (d e) e))))
 
 (define test222ex
@@ -498,10 +499,10 @@
      (id (sq e))))
 ; test
 (define test22
-  (lambda () (split  `(,(parse-2 test222ex))
+  (lambda () (split  `(,(parse test222ex))
                     (lambda (d e) e))))
 (define test222
-  (lambda () (split  `(,(parse-2 test222ex))
+  (lambda () (split  `(,(parse test222ex))
                     (lambda (d e) d))))
 
 (define square$
