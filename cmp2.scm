@@ -536,6 +536,7 @@
   (lambda (var e)
     (cond ((equal? var e) #t)
           ((or (not (pair? e)) (null? e)) #f)
+          ((equal? (car e) 'const) #f)
           ((member var e) #t)
           ((and (equal? 'lambda-simple (car e)) (member var (cadr e))) #f)
           ((and (equal? 'lambda-opt (car e)) (or (member var (cadr e)) (equal? var (caddr e)))) #f)
@@ -563,6 +564,7 @@
           ((and (equal? 'lambda-simple (car e)) (member var (cadr e))) #f)
           ((and (equal? 'lambda-opt (car e)) (or (member var (cadr e)) (equal? var (caddr e)))) #f)
           ((and (equal? 'lambda-var (car e)) (equal? var (cadr e))) #f)
+          ((equal? (car e) 'const) #f)
           (else (or (var-read? (car e) var) (var-read? (cdr e) var))))
     ))
 
