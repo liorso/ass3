@@ -300,7 +300,7 @@
                        (identify-lambda args
                                         (lambda (s) `(lambda-simple ,s (seq ,parsed)))
                                         (lambda (s opt) `(lambda-opt ,s ,opt (seq ,parsed)))
-                                        (lambda (var) `(lambda-var ,var (seq parsed))))
+                                        (lambda (var) `(lambda-var ,var (seq ,parsed))))
                        (identify-lambda args
                                         (lambda (s) `(lambda-simple ,s ,(parse (car exprs))))
                                         (lambda (s opt) `(lambda-opt ,s ,opt ,(parse (car exprs))))
@@ -440,19 +440,8 @@
 
 ;----------------------------------3 Eliminating nested define-expressions--------------------------------
 
-
-(define letrecTest
-  (lambda()
-    (letrec
-        ((id (lambda(x) x))
-         (sq (lambda(x) (* x x))))
-      (sq (id 2)))))
-
-(define letrecTest2
-  '(letrec
-        ((id (lambda(x) x))
-         (sq (lambda(x) (* x x))))
-      (sq (id 2))))
+(define eliminate-nested-defines
+  (lambda (x) x))
 
 (define split
   (lambda (pes ret-ds-es)
@@ -468,6 +457,10 @@
                            (ret-ds-es (append ds1 ds)
                                       (append es1 es)))))
                  (else (ret-ds-es ds (cons (car pes) es)))))))))
+
+
+
+
 
 (define *test-expr*
   '(define my-even?
@@ -510,6 +503,18 @@
 (define c
   (lambda (x) (lambda() 2 )))
                 
+(define letrecTest
+  (lambda()
+    (letrec
+        ((id (lambda(x) x))
+         (sq (lambda(x) (* x x))))
+      (sq (id 2)))))
+
+(define letrecTest2
+  '(letrec
+        ((id (lambda(x) x))
+         (sq (lambda(x) (* x x))))
+      (sq (id 2))))
 
 
 ;----------------------------------4 remove-applic-lambda-nil--------------------------------
