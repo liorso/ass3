@@ -1,8 +1,3 @@
-;;; qq.scm
-;;; A naive, one-level quasiquote implementation + optimizations
-;;;
-;;; Programmer: Mayer Goldberg, 2016
-
 (load "pattern-matcher.scm")
 
 
@@ -255,22 +250,6 @@
              `,(parse `#f))
              )))
 
- ;--------------------Lambda----------------implimented----daniel
-;          (pattern-rule
-;           `(lambda ,(? 'args ) . ,(? 'exprs))
-;           (lambda (args exprs)
-;             (if (> (length exprs) 1)  
-;                 (identify-lambda args
-;                                  (lambda (s) `(lambda-simple ,s (seq (,@(map parse (unbeginify exprs))))))
-;                                  (lambda (s opt) `(lambda-opt ,s ,opt (seq (,@(map parse (unbeginify exprs))))))
-;                                  (lambda (var) `(lambda-var ,var (seq (,@(map parse (unbeginify exprs))))))
-;                                  )
-;                 (identify-lambda args
-;                                  (lambda (s) `(lambda-simple ,s ,(parse (car exprs))))
-;                                  (lambda (s opt) `(lambda-opt ,s ,opt ,(parse (car exprs))))
-;                                  (lambda (var) `(lambda-var ,var ,(parse (car exprs)))))
-;                                  )))
-;
 
 
  ;          --------------------Lambda-NEW---------------implimented----daniel
@@ -290,11 +269,7 @@
                                 ,@exps)))
                          (,@(map (lambda(x) '(const #f)) defs)))))
                
-               ;)
-;               (display '++)
-;               (display defs)
-;               (display '--)
-;               (display exps)
+
                (if (= 0 (length defs))
                    (if (> (length exprs) 1)  
                        (identify-lambda args
@@ -458,63 +433,6 @@
                                       (append es1 es)))))
                  (else (ret-ds-es ds (cons (car pes) es)))))))))
 
-
-
-
-
-(define *test-expr*
-  '(define my-even?
-     (lambda (e)
-       (define even? (lambda (n) (or (zero? n) (odd? (- n 1)))))
-       (define odd?
-         (lambda (n) (and (positive? n) (even? (- n 1)))))
-       (even? e))))
-
-
-
-
-; test
-(define test2
-  (lambda ()
-    (split (parse test-expr2221)
-           (lambda (d e) e))))
-
-(define test222ex
-  '(lambda(e)
-     (define sq (lambda (x) (define y (lambda (z) (+ z 1))) (* x x (y 3))))
-     (define id (lambda (x) x))
-     (id (sq e))))
-
-(define testlet
-  '(letrec (
-     (sq (lambda(z) (define y (lambda (z) (+ z 1))) (* x x (y 3))))
-     (id (lambda(x) x)))
-     (id (sq e))))
-; test
-(define test22
-  (lambda () (split  `(,(parse test222ex))
-                    (lambda (d e) e))))
-(define test222
-  (lambda () (split  `(,(parse test222ex))
-                    (lambda (d e) d))))
-
-(define square$
-  (lambda (x cont) (cont (* x x))))
-(define c
-  (lambda (x) (lambda() 2 )))
-                
-(define letrecTest
-  (lambda()
-    (letrec
-        ((id (lambda(x) x))
-         (sq (lambda(x) (* x x))))
-      (sq (id 2)))))
-
-(define letrecTest2
-  '(letrec
-        ((id (lambda(x) x))
-         (sq (lambda(x) (* x x))))
-      (sq (id 2))))
 
 
 ;----------------------------------4 remove-applic-lambda-nil--------------------------------
